@@ -34,3 +34,70 @@
 .result-dot{width:8px;height:8px;border-radius:50%;background:#87948a}.result-dot.win{background:#9bd45f}.result-dot.loss{background:#e45a50}.result-dot.draw{background:#e0b85d}.rank-number{font:700 12px 'DM Mono',monospace;color:#c3e98c;width:18px}
 .exercise-create{background:#202922;border:1px solid #303b32;border-radius:9px;padding:14px;margin-bottom:12px}.exercise-create>strong{font-size:12px}.exercise-create button{width:auto;padding:9px 14px}
 @media(max-width:600px){.stat-grid{grid-template-columns:repeat(2,1fr)}.dashboard-row small{width:100%;margin-left:18px}.dashboard-head{align-items:flex-start}.dashboard-tabs{width:100%}.dashboard-tabs button{flex:1}}
+
+
+/* Rustic wood board and clearer captured-piece trays */
+.board{
+  padding:8px;
+  border:9px solid #4a2412;
+  border-radius:12px;
+  background:
+    repeating-linear-gradient(8deg,rgba(255,210,145,.08) 0 2px,transparent 2px 7px),
+    linear-gradient(135deg,#75401f,#2d160d 48%,#60351d);
+  box-shadow:0 18px 50px #0009,inset 0 0 0 2px #b8793d,inset 0 0 16px #160b06;
+}
+.square.light{
+  background-color:#dca66a;
+  background-image:repeating-linear-gradient(4deg,rgba(105,53,19,.12) 0 1px,transparent 1px 6px),linear-gradient(135deg,#f2c98d,#c88b4e);
+}
+.square.dark{
+  background-color:#75401f;
+  background-image:repeating-linear-gradient(-5deg,rgba(240,184,117,.09) 0 1px,transparent 1px 5px),linear-gradient(135deg,#92552d,#603016);
+}
+.square.last{background-color:#d8aa19;background-image:linear-gradient(135deg,#f1cf48,#bd8c0d)}
+.square.selected{background-color:#e4bd3f;background-image:linear-gradient(135deg,#f5d86a,#c69b21)}
+.square.light .coord{color:#70401f}
+.square.dark .coord{color:#f6d6a5}
+.piece{
+  font-size:clamp(34px,6vw,72px);
+  filter:drop-shadow(0 3px 2px #000b) drop-shadow(0 0 1px #fff8);
+  transform:translateY(-1px);
+}
+.white-piece{
+  color:#fffdf2;
+  -webkit-text-stroke:1.25px #4a3828;
+  text-shadow:0 2px 0 #9b8a73,0 3px 4px #000b;
+}
+.black-piece{
+  color:#252522;
+  -webkit-text-stroke:1px #080907;
+  text-shadow:0 1px 0 #c9b28e,0 3px 4px #000c;
+}
+.player-info{min-width:78px}
+.captured-pieces{
+  display:flex;
+  align-items:center;
+  gap:1px;
+  min-height:27px;
+  margin-left:3px;
+  flex:1;
+  overflow:hidden;
+  white-space:nowrap;
+}
+.captured-piece{
+  display:inline-block;
+  font-family:'DejaVu Sans','Segoe UI Symbol',serif;
+  font-size:19px;
+  line-height:1;
+  margin-left:-2px;
+  filter:drop-shadow(0 1px 1px #0009);
+}
+.captured-piece.white-piece{color:#f8f0dc;-webkit-text-stroke:.55px #57432e;text-shadow:0 1px 1px #0009}
+.captured-piece.black-piece{color:#282722;-webkit-text-stroke:.45px #080907;text-shadow:0 1px 1px #c9b28e}
+.single-tab{grid-template-columns:1fr;height:48px}
+.single-tab button{justify-content:flex-start;padding-left:20px;cursor:default}
+@media(max-width:760px){
+  .board{padding:5px;border-width:6px;border-radius:8px}
+  .captured-piece{font-size:16px}
+  .player-info{min-width:66px}
+}
