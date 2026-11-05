@@ -77,6 +77,8 @@ function App(){
   const lastMove = history.at(-1);
   const status = game.isCheckmate() ? `Xeque-mate — ${turn==='w'?'pretas':'brancas'} vencem` : game.isStalemate() ? 'Empate por afogamento' : game.isDraw() ? 'Empate' : game.isCheck() ? `${turn==='w'?'Brancas':'Pretas'} jogam · Xeque` : `${turn==='w'?'Brancas':'Pretas'} jogam`;
   const computerTurn = gameMode==='computer' && turn!==humanColor && !game.isGameOver() && historyIndex===moves.length;
+  const computerTurnRef = useRef(false); computerTurnRef.current = computerTurn;
+  const gameModeRef = useRef(gameMode); gameModeRef.current = gameMode;
 
   useEffect(()=>{
     try{
@@ -107,7 +109,7 @@ function App(){
           }else if(engineLevel<5&&eligible.length>1){
             chosen=eligible[Math.floor(Math.random()*eligible.length)]||best;
           }
-          const uci=gameMode==='computer'&&computerTurn?fallback:(chosen?.pv?.[0]||fallback);
+          const uci=gameModeRef.current==='computer'&&computerTurnRef.current?fallback:(chosen?.pv?.[0]||fallback);
           setBestMove(uci&&uci!=='(none)'?{from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||null}:null);
           setThinking(false);
         }
