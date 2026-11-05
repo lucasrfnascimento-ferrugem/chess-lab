@@ -82,9 +82,10 @@ function App(){
             return loss<=(tolerances[engineLevel]??0)+0.001;
           });
           let chosen=best;
-          if(engineLevel<5&&eligible.length>1){
-            const pool=engineLevel===1?eligible.slice().reverse():eligible;
-            chosen=pool[Math.floor(Math.random()*pool.length)]||best;
+          if(engineLevel===1&&eligible.length>1){
+            chosen=eligible[eligible.length-1];
+          }else if(engineLevel<5&&eligible.length>1){
+            chosen=eligible[Math.floor(Math.random()*eligible.length)]||best;
           }
           const uci=chosen?.pv?.[0]||fallback;
           setBestMove(uci&&uci!=='(none)'?{from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||null}:null);
