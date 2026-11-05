@@ -8,3 +8,11 @@
 .sound-controls button{background:#202822;border:1px solid #354038;color:#cbd3cb;border-radius:6px;padding:5px 9px;font-size:10px;cursor:pointer}
 .sound-controls button:disabled{opacity:.4;cursor:not-allowed}
 @media(max-width:760px){.sound-controls{flex-wrap:wrap}.sound-controls span{margin-left:auto}}
+
+.engine-levels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:0 18px 9px}
+.engine-levels button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 3px;background:#202822;border:1px solid #354038;border-radius:8px;color:#bfc9c0;cursor:pointer}
+.engine-levels button strong{font:700 17px 'DM Mono',monospace}
+.engine-levels button small{font-size:9px;color:#89958c}
+.engine-levels button.active{background:#35442d;border-color:#b8df71;color:#e4f3d2;box-shadow:inset 0 0 0 1px #b8df7133}
+.engine-levels button.active small{color:#c4df9e}
+.level-description{margin:0 18px;padding:9px 11px;background:#1d251f;border:1px solid #303a32;border-radius:7px;color:#aeb9af;font-size:10px;line-height:1.5}
