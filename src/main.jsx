@@ -24,6 +24,8 @@ function App(){
   const [showAlt,setShowAlt] = useState(true);
   const [analysisOn,setAnalysisOn] = useState(true);
   const [depth,setDepth] = useState(16);
+  const [engineLevel,setEngineLevel] = useState(5);
+  const engineCandidatesRef = useRef([]);
   const [selected,setSelected] = useState(null);
   const [promotion,setPromotion] = useState(null);
   const [historyIndex,setHistoryIndex] = useState(0);
@@ -62,12 +64,30 @@ function App(){
       workerRef.current = worker;
       worker.onmessage = (event)=>{
         const line = String(event.data || '');
-        if(line==='uciok'){worker.postMessage('setoption name MultiPV value 3');worker.postMessage('isready');}
+        if(line==='uciok'){worker.postMessage('setoption name MultiPV value 5');worker.postMessage('isready');}
         if(line==='readyok'){engineReady.current=true;setEngineState('Stockfish 19 Lite · pronto');}
         if(line.startsWith('info ')) parseEngineInfo(line);
         if(line.startsWith('bestmove ')){
-          const uci=line.split(/\s+/)[1];
-          setBestMove(uci && uci!=='(none)' ? {from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||null}:null);
+          const fallback=line.split(/\s+/)[1];
+          const ranked=[...engineCandidatesRef.current].sort((a,b)=>{
+            const score=x=>x.score??(x.mate!==null?(x.mate>0?100:-100):0);
+            return turnRef.current==='w'?score(b)-score(a):score(a)-score(b);
+          });
+          const tolerances={1:2.0,2:1.2,3:0.7,4:0.3,5:0};
+          const best=ranked[0];
+          const bestScore=best?(best.score??(best.mate!==null?(best.mate>0?100:-100):0)):0;
+          const eligible=ranked.filter(item=>{
+            const score=item.score??(item.mate!==null?(item.mate>0?100:-100):0);
+            const loss=turnRef.current==='w'?bestScore-score:score-bestScore;
+            return loss<=(tolerances[engineLevel]??0)+0.001;
+          });
+          let chosen=best;
+          if(engineLevel<5&&eligible.length>1){
+            const pool=engineLevel===1?eligible.slice().reverse():eligible;
+            chosen=pool[Math.floor(Math.random()*pool.length)]||best;
+          }
+          const uci=chosen?.pv?.[0]||fallback;
+          setBestMove(uci&&uci!=='(none)'?{from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||null}:null);
           setThinking(false);
         }
       };
@@ -87,6 +107,7 @@ function App(){
     if(mateScore!==null && turnRef.current==='b') mateScore=-mateScore;
     const pv=pvMatch[1].trim().split(/\s+/);
     const item={multipv,depth:depthNow,score,mate:mateScore,pv};
+    engineCandidatesRef.current=[...engineCandidatesRef.current.filter(x=>x.multipv!==multipv),item].sort((a,b)=>a.multipv-b.multipv);
     setEngineLines(prev=>{const next=[...prev.filter(x=>x.multipv!==multipv),item].sort((a,b)=>a.multipv-b.multipv);return next;});
     if(multipv===1){if(score!==null)setEvalCp(score);setMate(mateScore);}
   }
@@ -96,7 +117,7 @@ function App(){
     if(!worker||!engineReady.current||(!analysisOn&&gameMode!=='computer'))return;
     requestId.current++;
     worker.postMessage('stop');
-    setEngineLines([]);setBestMove(null);setThinking(true);
+    engineCandidatesRef.current=[];setEngineLines([]);setBestMove(null);setThinking(true);
     worker.postMessage(`position fen ${position}`);
     worker.postMessage(`go depth ${depth}`);
   },[analysisOn,depth,gameMode]);
@@ -222,7 +243,7 @@ function App(){
 
       <aside className="analysis-column">
         <div className="panel-tabs"><button className="active">◉ <span>Análise</span></button><button onClick={exportPgn}>▤ <span>Partida</span></button><button onClick={()=>setShowImport(v=>!v)}>⌕ <span>Explorar</span></button></div>
-        <div className="analysis-heading"><div><strong>ANÁLISE DA POSIÇÃO</strong><small>Stockfish 19 Lite · MultiPV 3</small></div><label className="switch"><input type="checkbox" checked={analysisOn} onChange={e=>setAnalysisOn(e.target.checked)}/><span/></label></div>
+        <div className="analysis-heading"><div><strong>ANÁLISE DA POSIÇÃO</strong><small>Stockfish 19 Lite · MultiPV 5</small></div><label className="switch"><input type="checkbox" checked={analysisOn} onChange={e=>setAnalysisOn(e.target.checked)}/><span/></label></div>
         <div className="eval-summary"><div><small>AVALIAÇÃO</small><strong className={evalCp>=0?'positive':'negative'}>{evalDisplay}</strong><span>{mate!==null?'Mate previsto':evalCp>0.3?'Vantagem das brancas':evalCp<-.3?'Vantagem das pretas':'Posição equilibrada'}</span></div><div><small>PROFUNDIDADE</small><strong>{engineLines[0]?.depth||'—'}</strong><span>plies calculados</span></div></div>
         <div className="lines-heading"><strong>Melhores continuações</strong><span>{thinking?'Calculando…':analysisOn?'Atualizado':'Pausado'}</span></div>
         <div className="lines-list">
@@ -232,7 +253,19 @@ function App(){
         <div className="tools-heading"><strong>Visualização do tabuleiro</strong></div>
         <div className="toggle-row"><label><input type="checkbox" checked={showArrows} onChange={e=>setShowArrows(e.target.checked)}/> Melhores lances <i className="legend blue"/></label><label><input type="checkbox" checked={showAlt} onChange={e=>setShowAlt(e.target.checked)}/> Linhas alternativas <i className="legend green"/></label><label><input type="checkbox" checked={showThreats} onChange={e=>setShowThreats(e.target.checked)}/> Ameaças imediatas <i className="legend red"/></label></div>
         <div className="section-divider"/>
-        <div className="tools-heading"><strong>Configuração da engine</strong><span>Profundidade: {depth}</span></div>
+        <div className="tools-heading"><strong>Nível de treinamento</strong><span>Força {engineLevel}/5</span></div>
+        <div className="engine-levels">
+          {[1,2,3,4,5].map(level=><button key={level} className={engineLevel===level?'active':''} onClick={()=>setEngineLevel(level)} aria-pressed={engineLevel===level}><strong>{level}</strong><small>{['Passivo','Fácil','Médio','Forte','Máximo'][level-1]}</small></button>)}
+        </div>
+        <div className="level-description">{[
+          'Nível 1 · Escolhe lances mais fracos entre as 5 melhores opções, com margem de até 2,0 peões.',
+          'Nível 2 · Alterna entre opções razoáveis, com margem de até 1,2 peões.',
+          'Nível 3 · Joga de forma consistente, com margem de até 0,7 peão.',
+          'Nível 4 · Quase sempre escolhe a melhor opção, com margem de até 0,3 peão.',
+          'Nível 5 · Prioriza sempre o melhor lance encontrado pelo Stockfish.'
+        ][engineLevel-1]}</div>
+        <div className="section-divider"/>
+        <div className="tools-heading"><strong>Profundidade da análise</strong><span>{depth} plies</span></div>
         <input className="depth-slider" type="range" min="10" max="22" step="1" value={depth} onChange={e=>setDepth(Number(e.target.value))}/>
         <div className="depth-labels"><span>Rápida</span><span>Mais profunda</span></div>
         <div className="section-divider"/>
