@@ -263,7 +263,7 @@ function App(){
     event.preventDefault();setAuthBusy(true);setAuthMessage('');
     try{
       if(authMode==='signup'){
-        const {data,error}=await supabase.auth.signUp({email:authEmail,password:authPassword,options:{data:{display_name:displayName.trim()||authEmail.split('@')[0]}}});
+        const {data,error}=await supabase.auth.signUp({email:authEmail,password:authPassword,options:{emailRedirectTo:'https://lucasrfnascimento-ferrugem.github.io/chess-lab/',data:{display_name:displayName.trim()||authEmail.split('@')[0]}}});
         if(error)throw error;
         if(data.session){setAuthOpen(false);setAuthMessage('Cadastro realizado.');}
         else setAuthMessage('Cadastro criado. Verifique seu e-mail para confirmar a conta e depois entre.');
