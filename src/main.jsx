@@ -142,7 +142,7 @@ function App(){
   },[analysisOn,depth,gameMode]);
 
   useEffect(()=>{
-    if(engineReady.current && analysisOn) analyze(fen);
+    if(engineReady.current && (analysisOn || gameMode==='computer')) analyze(fen);
     else if(!analysisOn&&gameMode!=='computer'){setThinking(false);setEngineLines([]);setBestMove(null);}
   },[fen,analysisOn,depth,analyze,engineState,gameMode]);
 
