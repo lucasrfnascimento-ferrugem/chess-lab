@@ -43,6 +43,7 @@ function App(){
   const [analysisOn,setAnalysisOn] = useState(true);
   const [depth,setDepth] = useState(16);
   const [engineLevel,setEngineLevel] = useState(5);
+  const [opponentLevel,setOpponentLevel] = useState('beginner');
   const engineCandidatesRef = useRef([]);
   const [selected,setSelected] = useState(null);
   const [promotion,setPromotion] = useState(null);
@@ -106,7 +107,7 @@ function App(){
           }else if(engineLevel<5&&eligible.length>1){
             chosen=eligible[Math.floor(Math.random()*eligible.length)]||best;
           }
-          const uci=chosen?.pv?.[0]||fallback;
+          const uci=gameMode==='computer'&&computerTurn?fallback:(chosen?.pv?.[0]||fallback);
           setBestMove(uci&&uci!=='(none)'?{from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||null}:null);
           setThinking(false);
         }
@@ -139,8 +140,15 @@ function App(){
     worker.postMessage('stop');
     engineCandidatesRef.current=[];setEngineLines([]);setBestMove(null);setThinking(true);
     worker.postMessage(`position fen ${position}`);
+    if(gameMode==='computer' && computerTurn){
+      const elo={beginner:800,intermediate:1400,advanced:1900,master:2400}[opponentLevel]||800;
+      worker.postMessage('setoption name UCI_LimitStrength value true');
+      worker.postMessage(`setoption name UCI_Elo value ${elo}`);
+    }else{
+      worker.postMessage('setoption name UCI_LimitStrength value false');
+    }
     worker.postMessage(`go depth ${depth}`);
-  },[analysisOn,depth,gameMode]);
+  },[analysisOn,depth,gameMode,computerTurn,opponentLevel]);
 
   useEffect(()=>{
     if(engineReady.current && (analysisOn || gameMode==='computer')) analyze(fen);
@@ -359,17 +367,25 @@ function App(){
         <div className="tools-heading"><strong>Visualização do tabuleiro</strong></div>
         <div className="toggle-row"><label><input type="checkbox" checked={showArrows} onChange={e=>setShowArrows(e.target.checked)}/> Melhores lances <i className="legend blue"/></label><label><input type="checkbox" checked={showAlt} onChange={e=>setShowAlt(e.target.checked)}/> Linhas alternativas <i className="legend green"/></label><label><input type="checkbox" checked={showThreats} onChange={e=>setShowThreats(e.target.checked)}/> Ameaças imediatas <i className="legend red"/></label></div>
         <div className="section-divider"/>
-        <div className="tools-heading"><strong>Nível de treinamento</strong><span>Força {engineLevel}/5</span></div>
-        <div className="engine-levels">
-          {[1,2,3,4,5].map(level=><button key={level} className={engineLevel===level?'active':''} onClick={()=>setEngineLevel(level)} aria-pressed={engineLevel===level}><strong>{level}</strong><small>{['Passivo','Fácil','Médio','Forte','Máximo'][level-1]}</small></button>)}
-        </div>
-        <div className="level-description">{[
-          'Nível 1 · Escolhe lances mais fracos entre as 5 melhores opções, com margem de até 2,0 peões.',
-          'Nível 2 · Alterna entre opções razoáveis, com margem de até 1,2 peões.',
-          'Nível 3 · Joga de forma consistente, com margem de até 0,7 peão.',
-          'Nível 4 · Quase sempre escolhe a melhor opção, com margem de até 0,3 peão.',
-          'Nível 5 · Prioriza sempre o melhor lance encontrado pelo Stockfish.'
-        ][engineLevel-1]}</div>
+        {gameMode==='computer'?<>
+          <div className="tools-heading"><strong>Nível do adversário</strong><span>{({beginner:'Iniciante',intermediate:'Intermediário',advanced:'Avançado',master:'Mestre'})[opponentLevel]}</span></div>
+          <div className="engine-levels opponent-levels">
+            {[['beginner','Iniciante'],['intermediate','Intermediário'],['advanced','Avançado'],['master','Mestre']].map(([level,label])=><button key={level} className={opponentLevel===level?'active':''} onClick={()=>setOpponentLevel(level)} aria-pressed={opponentLevel===level}><strong>{label}</strong></button>)}
+          </div>
+          <div className="level-description">A força do Stockfish será ajustada para jogar como um adversário {({beginner:'iniciante',intermediate:'intermediário',advanced:'avançado',master:'mestre'})[opponentLevel]}.</div>
+        </>:<>
+          <div className="tools-heading"><strong>Nível de treinamento</strong><span>Força {engineLevel}/5</span></div>
+          <div className="engine-levels">
+            {[1,2,3,4,5].map(level=><button key={level} className={engineLevel===level?'active':''} onClick={()=>setEngineLevel(level)} aria-pressed={engineLevel===level}><strong>{level}</strong><small>{['Passivo','Fácil','Médio','Forte','Máximo'][level-1]}</small></button>)}
+          </div>
+          <div className="level-description">{[
+            'Nível 1 · Escolhe lances mais fracos entre as 5 melhores opções, com margem de até 2,0 peões.',
+            'Nível 2 · Alterna entre opções razoáveis, com margem de até 1,2 peões.',
+            'Nível 3 · Joga de forma consistente, com margem de até 0,7 peão.',
+            'Nível 4 · Quase sempre escolhe a melhor opção, com margem de até 0,3 peão.',
+            'Nível 5 · Prioriza sempre o melhor lance encontrado pelo Stockfish.'
+          ][engineLevel-1]}</div>
+        </>}
         <div className="section-divider"/>
         <div className="tools-heading"><strong>Profundidade da análise</strong><span>{depth} plies</span></div>
         <input className="depth-slider" type="range" min="10" max="22" step="1" value={depth} onChange={e=>setDepth(Number(e.target.value))}/>
