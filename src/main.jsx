@@ -305,11 +305,15 @@ function App(){
   async function createExercise(){
     if(!session?.user){setAuthOpen(true);return;}
     if(exerciseTitle.trim().length<3){setNotice('Informe um título com pelo menos 3 caracteres.');return;}
-    const {error}=await supabase.from('exercises').insert({
+    const {data:created,error}=await supabase.from('exercises').insert({
       creator_id:session.user.id,title:exerciseTitle.trim(),description:exerciseDescription.trim(),
-      fen:game.fen(),solution_pgn:game.pgn(),difficulty:exerciseDifficulty,is_public:true
-    });
+      fen:game.fen(),difficulty:exerciseDifficulty,is_public:true
+    }).select('id').single();
     if(error){setNotice('Não foi possível publicar o exercício: '+error.message);return;}
+    const {error:solutionError}=await supabase.from('exercise_solutions').insert({
+      exercise_id:created.id,creator_id:session.user.id,solution_pgn:game.pgn()
+    });
+    if(solutionError){setNotice('Exercício publicado, mas a solução não foi salva: '+solutionError.message);return;}
     setExerciseTitle('');setExerciseDescription('');setNotice('Exercício publicado para os colegas.');
     refreshUserData(session.user);
   }
