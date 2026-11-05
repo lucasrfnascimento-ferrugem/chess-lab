@@ -1,0 +1,22 @@
+{
+  "name": "chess-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "postinstall": "node scripts/copy-engine.mjs"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stockfish": "19.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.1.0"
+  }
+}
