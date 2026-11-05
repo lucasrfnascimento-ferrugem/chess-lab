@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Chess } from 'chess.js';
+import { supabase } from './lib/supabase.js';
 import './styles.css';
 
 const PIECES = { wk:'♔', wq:'♕', wr:'♖', wb:'♗', wn:'♘', wp:'♙', bk:'♚', bq:'♛', br:'♜', bb:'♝', bn:'♞', bp:'♟' };
@@ -11,6 +12,23 @@ const clamp = (n,min,max) => Math.max(min,Math.min(max,n));
 function pvToSan(fen,pv){const g=new Chess(fen);const out=[];for(const u of (pv||[]).slice(0,9)){try{const m=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]||'q'});if(!m)break;out.push(m.san);}catch{break;}}return out.join(' ');}
 
 function App(){
+  const [session,setSession] = useState(null);
+  const [authOpen,setAuthOpen] = useState(false);
+  const [authMode,setAuthMode] = useState('login');
+  const [authEmail,setAuthEmail] = useState('');
+  const [authPassword,setAuthPassword] = useState('');
+  const [displayName,setDisplayName] = useState('');
+  const [authBusy,setAuthBusy] = useState(false);
+  const [authMessage,setAuthMessage] = useState('');
+  const [profile,setProfile] = useState(null);
+  const [savedGames,setSavedGames] = useState([]);
+  const [leaderboard,setLeaderboard] = useState([]);
+  const [exercises,setExercises] = useState([]);
+  const [exerciseTitle,setExerciseTitle] = useState('');
+  const [exerciseDescription,setExerciseDescription] = useState('');
+  const [exerciseDifficulty,setExerciseDifficulty] = useState('intermediate');
+  const [dashboardTab,setDashboardTab] = useState('history');
+  const savedGameKeyRef = useRef('');
   const [gameMode,setGameMode] = useState('both');
   const [humanColor,setHumanColor] = useState('w');
   const [orientation,setOrientation] = useState('w');
@@ -214,8 +232,90 @@ function App(){
   const evalDisplay=mate!==null?`M${Math.abs(mate)}`:`${evalCp>=0?'+':''}${evalCp.toFixed(1)}`;
   const evalWhite=mate!==null?(mate>0?1:0):clamp(.5+evalCp/10,0,1);
 
+  const refreshUserData = useCallback(async (user)=>{
+    if(!user){setProfile(null);setSavedGames([]);setLeaderboard([]);setExercises([]);return;}
+    const [p,g,l,e]=await Promise.all([
+      supabase.from('profiles').select('id,display_name,username,show_in_leaderboard').eq('id',user.id).maybeSingle(),
+      supabase.from('games').select('id,result,mode,engine_level,moves_count,created_at,pgn').eq('user_id',user.id).order('created_at',{ascending:false}).limit(30),
+      supabase.from('leaderboard').select('user_id,display_name,games_played,wins,draws,losses,points').order('points',{ascending:false}).order('wins',{ascending:false}).limit(20),
+      supabase.from('exercises').select('id,title,description,difficulty,fen,created_at').eq('is_public',true).order('created_at',{ascending:false}).limit(20)
+    ]);
+    if(p.data)setProfile(p.data);
+    if(g.data)setSavedGames(g.data);
+    if(l.data)setLeaderboard(l.data);
+    if(e.data)setExercises(e.data);
+  },[]);
+
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data})=>{
+      setSession(data.session);
+      if(data.session?.user) refreshUserData(data.session.user);
+    });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,nextSession)=>{
+      setSession(nextSession);
+      if(nextSession?.user) setTimeout(()=>refreshUserData(nextSession.user),0);
+      else refreshUserData(null);
+    });
+    return ()=>subscription.unsubscribe();
+  },[refreshUserData]);
+
+  async function handleAuthSubmit(event){
+    event.preventDefault();setAuthBusy(true);setAuthMessage('');
+    try{
+      if(authMode==='signup'){
+        const {data,error}=await supabase.auth.signUp({email:authEmail,password:authPassword,options:{data:{display_name:displayName.trim()||authEmail.split('@')[0]}}});
+        if(error)throw error;
+        if(data.session){setAuthOpen(false);setAuthMessage('Cadastro realizado.');}
+        else setAuthMessage('Cadastro criado. Verifique seu e-mail para confirmar a conta e depois entre.');
+      }else{
+        const {error}=await supabase.auth.signInWithPassword({email:authEmail,password:authPassword});
+        if(error)throw error;
+        setAuthOpen(false);setAuthPassword('');
+      }
+    }catch(error){setAuthMessage(error.message||'Não foi possível autenticar.');}
+    finally{setAuthBusy(false);}
+  }
+
+  async function handleSignOut(){
+    const {error}=await supabase.auth.signOut();
+    if(error)setNotice('Erro ao sair: '+error.message);
+  }
+
+  async function saveFinishedGame(){
+    if(!session?.user||!game.isGameOver()||history.length===0)return;
+    const pgn=game.pgn();
+    const key=session.user.id+'|'+pgn;
+    if(savedGameKeyRef.current===key)return;
+    savedGameKeyRef.current=key;
+    const draw=game.isDraw()||game.isStalemate();
+    const winner=game.turn()==='w'?'b':'w';
+    const result=draw?'draw':(gameMode==='computer'?(winner===humanColor?'win':'loss'):(winner==='w'?'win':'loss'));
+    const {error}=await supabase.from('games').insert({
+      user_id:session.user.id,initial_fen:initialFen,pgn,result,mode:gameMode,
+      human_color:gameMode==='computer'?humanColor:null,engine_level:gameMode==='computer'?engineLevel:null,
+      depth,moves_count:history.length,finished_at:new Date().toISOString()
+    });
+    if(error){savedGameKeyRef.current='';setNotice('Partida terminou, mas não foi salva: '+error.message);return;}
+    setNotice('Partida salva no seu histórico.');
+    refreshUserData(session.user);
+  }
+
+  useEffect(()=>{saveFinishedGame();},[session,game.isGameOver(),history.length,gameMode,humanColor,engineLevel,depth]);
+
+  async function createExercise(){
+    if(!session?.user){setAuthOpen(true);return;}
+    if(exerciseTitle.trim().length<3){setNotice('Informe um título com pelo menos 3 caracteres.');return;}
+    const {error}=await supabase.from('exercises').insert({
+      creator_id:session.user.id,title:exerciseTitle.trim(),description:exerciseDescription.trim(),
+      fen:game.fen(),solution_pgn:game.pgn(),difficulty:exerciseDifficulty,is_public:true
+    });
+    if(error){setNotice('Não foi possível publicar o exercício: '+error.message);return;}
+    setExerciseTitle('');setExerciseDescription('');setNotice('Exercício publicado para os colegas.');
+    refreshUserData(session.user);
+  }
+
   return <div className="app-shell">
-    <header className="topbar"><div className="brand"><div className="brand-mark">♞</div><div><div className="brand-name">CHESS <span>LAB</span></div><div className="brand-sub">TREINAMENTO E ANÁLISE</div></div></div><div className="top-actions"><span className="engine-dot"/><span>{engineState}</span><button className="icon-button" title="Configurações">⚙</button></div></header>
+    <header className="topbar"><div className="brand"><div className="brand-mark">♞</div><div><div className="brand-name">CHESS <span>LAB</span></div><div className="brand-sub">TREINAMENTO E ANÁLISE</div></div></div><div className="top-actions"><span className="engine-dot"/><span>{engineState}</span>{session?<><span className="signed-user">{profile?.display_name||session.user.email}</span><button className="icon-button" onClick={handleSignOut}>Sair</button></>:<button className="icon-button" onClick={()=>{setAuthMode('login');setAuthOpen(true);}}>Entrar / Cadastrar</button>}<button className="icon-button" title="Configurações">⚙</button></div></header>
     <main className="workspace">
       <section className="board-column">
         <div className="player-row"><div className="avatar black">♚</div><div><strong>PRETAS</strong><small>{gameMode==='computer'&&humanColor==='b'?'Você':'Treinamento'}</small></div><span className="player-rating">—</span></div>
@@ -276,6 +376,27 @@ function App(){
         {showImport&&<div className="import-box"><div className="import-head"><strong>Importar posição ou partida</strong><button onClick={()=>setShowImport(false)}>×</button></div><label>FEN<input value={fenInput} onChange={e=>setFenInput(e.target.value)} placeholder="Cole uma posição FEN"/></label><button onClick={loadFen}>Carregar FEN</button><label>PGN<textarea value={pgnInput} onChange={e=>setPgnInput(e.target.value)} placeholder="Cole a notação PGN"/></label><button onClick={loadPgn}>Carregar PGN</button></div>}
       </aside>
     </main>
+    {authOpen&&<div className="modal-backdrop"><form className="auth-modal" onSubmit={handleAuthSubmit}>
+      <div className="import-head"><strong>{authMode==='login'?'Entrar no Chess Lab':'Criar conta'}</strong><button type="button" onClick={()=>setAuthOpen(false)}>×</button></div>
+      {authMode==='signup'&&<label>Nome de exibição<input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Como aparecerá no ranking" maxLength={40}/></label>}
+      <label>E-mail<input type="email" required autoComplete="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} placeholder="voce@email.com"/></label>
+      <label>Senha<input type="password" required minLength={6} autoComplete={authMode==='login'?'current-password':'new-password'} value={authPassword} onChange={e=>setAuthPassword(e.target.value)} placeholder="Mínimo de 6 caracteres"/></label>
+      {authMessage&&<p className="auth-message">{authMessage}</p>}
+      <button className="auth-submit" disabled={authBusy}>{authBusy?'Aguarde…':authMode==='login'?'Entrar':'Criar conta'}</button>
+      <button type="button" className="auth-switch" onClick={()=>{setAuthMode(v=>v==='login'?'signup':'login');setAuthMessage('');}}>{authMode==='login'?'Ainda não tem conta? Cadastre-se':'Já tem conta? Entrar'}</button>
+    </form></div>}
+    {session&&<section className="dashboard-panel">
+      <div className="dashboard-head"><div><strong>PAINEL DO JOGADOR</strong><small>{profile?.display_name||session.user.email} · dados sincronizados na nuvem</small></div>
+        <div className="dashboard-tabs"><button className={dashboardTab==='history'?'active':''} onClick={()=>setDashboardTab('history')}>Partidas</button><button className={dashboardTab==='ranking'?'active':''} onClick={()=>setDashboardTab('ranking')}>Ranking</button><button className={dashboardTab==='exercises'?'active':''} onClick={()=>setDashboardTab('exercises')}>Exercícios</button></div>
+      </div>
+      {dashboardTab==='history'&&<div className="dashboard-content">
+        <div className="stat-grid"><div><small>PARTIDAS</small><strong>{savedGames.length}</strong></div><div><small>VITÓRIAS</small><strong>{savedGames.filter(g=>g.result==='win').length}</strong></div><div><small>EMPATES</small><strong>{savedGames.filter(g=>g.result==='draw').length}</strong></div><div><small>DERROTAS</small><strong>{savedGames.filter(g=>g.result==='loss').length}</strong></div></div>
+        <div className="dashboard-list">{savedGames.length===0?<p className="empty-moves">Suas partidas concluídas aparecerão aqui automaticamente.</p>:savedGames.map(g=><div className="dashboard-row" key={g.id}><span className={'result-dot '+g.result}/><strong>{g.result==='win'?'Vitória':g.result==='loss'?'Derrota':g.result==='draw'?'Empate':'Em andamento'}</strong><small>{g.mode==='computer'?'Contra engine':'Análise / dois lados'} · {g.moves_count} lances · {new Date(g.created_at).toLocaleDateString('pt-BR')}</small></div>)}</div>
+      </div>}
+      {dashboardTab==='ranking'&&<div className="dashboard-list">{leaderboard.length===0?<p className="empty-moves">Ainda não há resultados no ranking.</p>:leaderboard.map((p,i)=><div className="dashboard-row" key={p.user_id}><span className="rank-number">{i+1}</span><strong>{p.display_name}{p.user_id===session.user.id?' (você)':''}</strong><small>{p.points} pts · {p.wins} vitórias · {p.games_played} partidas</small></div>)}</div>}
+      {dashboardTab==='exercises'&&<div className="dashboard-content"><div className="exercise-create"><strong>Publicar posição atual como exercício</strong><input value={exerciseTitle} onChange={e=>setExerciseTitle(e.target.value)} placeholder="Título do exercício"/><input value={exerciseDescription} onChange={e=>setExerciseDescription(e.target.value)} placeholder="Descrição / objetivo (opcional)"/><select value={exerciseDifficulty} onChange={e=>setExerciseDifficulty(e.target.value)}><option value="beginner">Iniciante</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select><button onClick={createExercise}>Publicar posição atual</button></div>
+      <div className="dashboard-list">{exercises.length===0?<p className="empty-moves">Nenhum exercício público ainda.</p>:exercises.map(ex=><div className="dashboard-row" key={ex.id}><strong>{ex.title}</strong><small>{ex.difficulty==='beginner'?'Iniciante':ex.difficulty==='advanced'?'Avançado':'Intermediário'} · {ex.description||'Sem descrição'}</small><button onClick={()=>{try{const g=new Chess(ex.fen);setInitialFen(g.fen());setMoves([]);setHistoryIndex(0);setNotice('Posição do exercício carregada.');}catch{setNotice('FEN deste exercício inválido.');}}}>Carregar posição</button></div>)}</div></div>}
+    </section>}
     {promotion&&<div className="modal-backdrop"><div className="promotion-modal"><strong>Escolha a peça para promoção</strong><div>{['q','r','b','n'].map(t=><button key={t} onClick={()=>commitMove(promotion.from,promotion.to,t)}>{PIECES[promotion.color+t]}</button>)}</div><button className="cancel" onClick={()=>setPromotion(null)}>Cancelar</button></div></div>}
     <footer className="footer">CHESS LAB <span>·</span> Análise local no navegador <span>·</span> Versão 1.0</footer>
   </div>;
