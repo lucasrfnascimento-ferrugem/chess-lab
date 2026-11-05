@@ -101,3 +101,7 @@
   .captured-piece{font-size:16px}
   .player-info{min-width:66px}
 }
+
+.engine-levels.opponent-levels{grid-template-columns:repeat(4,minmax(0,1fr))}
+.engine-levels.opponent-levels button strong{font:700 12px Manrope,system-ui,sans-serif;white-space:nowrap}
+@media(max-width:420px){.engine-levels.opponent-levels{grid-template-columns:repeat(2,minmax(0,1fr))}}
