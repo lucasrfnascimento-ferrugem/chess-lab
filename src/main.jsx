@@ -35,6 +35,9 @@ function App(){
   const [mate,setMate] = useState(null);
   const [thinking,setThinking] = useState(false);
   const [notice,setNotice] = useState('Selecione uma peça e depois a casa de destino.');
+  const [soundOn,setSoundOn] = useState(true);
+  const [soundVolume,setSoundVolume] = useState(55);
+  const audioRef = useRef(null);
   const workerRef = useRef(null);
   const engineReady = useRef(false);
   const requestId = useRef(0);
@@ -115,11 +118,32 @@ function App(){
     return ()=>clearTimeout(timer);
   },[computerTurn,bestMove,thinking,fen]);
 
+  function playMoveSound(type){
+    if(!soundOn || soundVolume===0) return;
+    try{
+      const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+      if(!AudioContextClass)return;
+      const ctx=audioRef.current||(audioRef.current=new AudioContextClass());
+      if(ctx.state==='suspended')ctx.resume();
+      const now=ctx.currentTime;
+      const presets={move:[520,0.055,'sine'],capture:[260,0.11,'triangle'],check:[880,0.16,'sawtooth'],mate:[660,0.28,'triangle']};
+      const [freq,duration,wave]=presets[type]||presets.move;
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type=wave;osc.frequency.setValueAtTime(freq,now);
+      if(type==='check'||type==='mate')osc.frequency.exponentialRampToValueAtTime(freq*0.72,now+duration);
+      gain.gain.setValueAtTime((soundVolume/100)*0.12,now);
+      gain.gain.exponentialRampToValueAtTime(0.001,now+duration);
+      osc.connect(gain);gain.connect(ctx.destination);osc.start(now);osc.stop(now+duration);
+    }catch{}
+  }
+
   function commitMove(from,to,promo){
     const g=new Chess(fen);
     try{
       const made=g.move({from,to,promotion:promo||'q'});
       if(!made)return;
+      const soundType=g.isCheckmate()?'mate':g.isCheck()?'check':made.captured?'capture':'move';
+      playMoveSound(soundType);
       const newMoves=[...moves.slice(0,historyIndex),...g.history({verbose:true}).slice(-1)];
       setMoves(newMoves);setHistoryIndex(newMoves.length);setSelected(null);setPromotion(null);setNotice(`${made.color==='w'?'Brancas':'Pretas'}: ${made.san}`);
     }catch{setNotice('Movimento ilegal. Escolha uma casa destacada.');}
@@ -191,7 +215,8 @@ function App(){
           </div>
         </div>
         <div className="player-row bottom-player"><div className="avatar white">♔</div><div><strong>BRANCAS</strong><small>{gameMode==='computer'&&humanColor==='w'?'Você':'Treinamento'}</small></div><span className="player-rating">—</span></div>
-        <div className="board-controls"><button onClick={()=>navigate(0)} title="Início">|◀</button><button onClick={undo} disabled={historyIndex===0} title="Voltar">‹</button><button onClick={redo} disabled={historyIndex===moves.length} title="Avançar">›</button><button onClick={()=>navigate(moves.length)} title="Fim">▶|</button><span className="control-spacer"/><button onClick={flip} title="Girar tabuleiro">↻ Girar</button><button onClick={changeHumanColor} title="Alternar lado do jogador">Jogar de {humanColor==='w'?'brancas':'pretas'}</button><button onClick={restart} title="Reiniciar">↺ Reiniciar</button></div>
+        <div className="board-controls"><button onClick={()=>navigate(0)} title="Início">|◀</button><button onClick={undo} disabled={historyIndex===0} title="Voltar">‹</button><button onClick={redo} disabled={historyIndex===moves.length} title="Avançar">›</button><button onClick={()=>navigate(moves.length)} title="Fim">▶|</button><span className="control-spacer"/><button onClick={flip} title="Girar tabuleiro">↻ Girar</button><button onClick={changeHumanColor} title="Alternar seu lado">Você joga de: {humanColor==='w'?'BRANCAS':'PRETAS'}</button><button onClick={restart} title="Reiniciar">↺ Reiniciar</button></div>
+        <div className="sound-controls"><label><input type="checkbox" checked={soundOn} onChange={e=>setSoundOn(e.target.checked)}/> Sons</label><span>Volume</span><input aria-label="Volume dos efeitos sonoros" type="range" min="0" max="100" value={soundVolume} onChange={e=>setSoundVolume(Number(e.target.value))}/><button onClick={()=>playMoveSound('move')} disabled={!soundOn||soundVolume===0}>Testar</button></div>
         <div className="status-line"><span className={`status-indicator ${game.isCheck()?'danger':''}`}/>{status}<span className="status-note">{notice}</span></div>
       </section>
 
