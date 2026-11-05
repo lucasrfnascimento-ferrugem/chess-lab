@@ -70,6 +70,7 @@ function App(){
   const turn = game.turn();
   turnRef.current = turn;
   const history = game.history({verbose:true});
+  const capturedPieces = useMemo(() => { const byColor={w:[],b:[]}; history.forEach(move=>{if(move.captured)byColor[move.color].push(move.captured);}); const order=['q','r','b','n','p']; Object.keys(byColor).forEach(color=>byColor[color].sort((a,b)=>order.indexOf(a)-order.indexOf(b))); return byColor; },[historyIndex,moves,initialFen]);
   const legalMoves = selected ? game.moves({square:selected,verbose:true}) : [];
   const legalTargets = new Set(legalMoves.map(m=>m.to));
   const lastMove = history.at(-1);
@@ -322,7 +323,7 @@ function App(){
     <header className="topbar"><div className="brand"><div className="brand-mark">♞</div><div><div className="brand-name">CHESS <span>LAB</span></div><div className="brand-sub">TREINAMENTO E ANÁLISE</div></div></div><div className="top-actions"><span className="engine-dot"/><span>{engineState}</span>{session?<><span className="signed-user">{profile?.display_name||session.user.email}</span><button className="icon-button" onClick={handleSignOut}>Sair</button></>:<button className="icon-button" onClick={()=>{setAuthMode('login');setAuthOpen(true);}}>Entrar / Cadastrar</button>}<button className="icon-button" title="Configurações">⚙</button></div></header>
     <main className="workspace">
       <section className="board-column">
-        <div className="player-row"><div className="avatar black">♚</div><div><strong>PRETAS</strong><small>{gameMode==='computer'&&humanColor==='b'?'Você':'Treinamento'}</small></div><span className="player-rating">—</span></div>
+        <div className="player-row"><div className="avatar black">♚</div><div className="player-info"><strong>PRETAS</strong><small>{gameMode==='computer'&&humanColor==='b'?'Você':'Treinamento'}</small></div><div className="captured-pieces" aria-label="Peças pretas capturadas">{capturedPieces.w.map((type,i)=><span key={i} className="captured-piece white-piece">{PIECES['b'+type]}</span>)}</div><span className="player-rating">—</span></div>
         <div className="board-wrap">
           <div className="eval-bar"><div className="eval-black" style={{height:`${(1-evalWhite)*100}%`}}/><div className="eval-label">{evalDisplay}</div></div>
           <div className="board" role="grid" aria-label="Tabuleiro de xadrez">
@@ -340,14 +341,14 @@ function App(){
             })}
           </div>
         </div>
-        <div className="player-row bottom-player"><div className="avatar white">♔</div><div><strong>BRANCAS</strong><small>{gameMode==='computer'&&humanColor==='w'?'Você':'Treinamento'}</small></div><span className="player-rating">—</span></div>
+        <div className="player-row bottom-player"><div className="avatar white">♔</div><div className="player-info"><strong>BRANCAS</strong><small>{gameMode==='computer'&&humanColor==='w'?'Você':'Treinamento'}</small></div><div className="captured-pieces" aria-label="Peças brancas capturadas">{capturedPieces.b.map((type,i)=><span key={i} className="captured-piece black-piece">{PIECES['w'+type]}</span>)}</div><span className="player-rating">—</span></div>
         <div className="board-controls"><button onClick={()=>navigate(0)} title="Início">|◀</button><button onClick={undo} disabled={historyIndex===0} title="Voltar">‹</button><button onClick={redo} disabled={historyIndex===moves.length} title="Avançar">›</button><button onClick={()=>navigate(moves.length)} title="Fim">▶|</button><span className="control-spacer"/><button onClick={flip} title="Girar tabuleiro">↻ Girar</button><button onClick={changeHumanColor} title="Alternar seu lado">Você joga de: {humanColor==='w'?'BRANCAS':'PRETAS'}</button><button onClick={restart} title="Reiniciar">↺ Reiniciar</button></div>
         <div className="sound-controls"><label><input type="checkbox" checked={soundOn} onChange={e=>setSoundOn(e.target.checked)}/> Sons</label><span>Volume</span><input aria-label="Volume dos efeitos sonoros" type="range" min="0" max="100" value={soundVolume} onChange={e=>setSoundVolume(Number(e.target.value))}/><button onClick={()=>playMoveSound('move')} disabled={!soundOn||soundVolume===0}>Testar</button></div>
         <div className="status-line"><span className={`status-indicator ${game.isCheck()?'danger':''}`}/>{status}<span className="status-note">{notice}</span></div>
       </section>
 
       <aside className="analysis-column">
-        <div className="panel-tabs"><button className="active">◉ <span>Análise</span></button><button onClick={exportPgn}>▤ <span>Partida</span></button><button onClick={()=>setShowImport(v=>!v)}>⌕ <span>Explorar</span></button></div>
+        <div className="panel-tabs single-tab"><button className="active">◉ <span>Análise</span></button></div>
         <div className="analysis-heading"><div><strong>ANÁLISE DA POSIÇÃO</strong><small>Stockfish 19 Lite · MultiPV 5</small></div><label className="switch"><input type="checkbox" checked={analysisOn} onChange={e=>setAnalysisOn(e.target.checked)}/><span/></label></div>
         <div className="eval-summary"><div><small>AVALIAÇÃO</small><strong className={evalCp>=0?'positive':'negative'}>{evalDisplay}</strong><span>{mate!==null?'Mate previsto':evalCp>0.3?'Vantagem das brancas':evalCp<-.3?'Vantagem das pretas':'Posição equilibrada'}</span></div><div><small>PROFUNDIDADE</small><strong>{engineLines[0]?.depth||'—'}</strong><span>plies calculados</span></div></div>
         <div className="lines-heading"><strong>Melhores continuações</strong><span>{thinking?'Calculando…':analysisOn?'Atualizado':'Pausado'}</span></div>
