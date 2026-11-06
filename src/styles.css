@@ -110,3 +110,34 @@
 .san-legend strong{width:100%;font-size:10px;letter-spacing:.04em;color:#d6dfd3;text-transform:uppercase}
 .san-legend span{white-space:nowrap}
 .san-legend b{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 3px;margin-right:3px;border-radius:4px;background:#35442d;color:#e4f3d2;font-size:11px}
+
+.game-review{margin:13px;padding:13px;background:#1d251f;border:1px solid #3a473c;border-radius:9px}
+.review-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.review-head strong{display:block;font-size:12px}
+.review-head small{display:block;color:#87948a;font-size:10px;margin-top:4px;line-height:1.4}
+.review-head button{flex:none;background:#b8df71;color:#182017;border:0;border-radius:7px;padding:9px 11px;font-size:10px;font-weight:800;cursor:pointer}
+.review-head button:disabled{opacity:.45;cursor:not-allowed}
+.review-progress{margin-top:12px}
+.review-progress>div:first-child{display:flex;justify-content:space-between;color:#aeb9af;font-size:10px;margin-bottom:6px}
+.review-progress-track{height:6px;background:#303a32;border-radius:9px;overflow:hidden}
+.review-progress-track span{display:block;height:100%;background:#b8df71;transition:width .2s}
+.review-toggle{width:100%;margin-top:10px;text-align:left;background:#273229;border:1px solid #3b493d;border-radius:7px;color:#dce7dc;padding:9px;font-size:10px;cursor:pointer}
+.review-results{margin-top:10px;max-height:440px;overflow:auto}
+.review-summary{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.review-summary span{padding:6px 8px;background:#273229;border-radius:6px;color:#aeb9af;font-size:9px}
+.review-summary strong{color:#e5eee5;font:700 12px 'DM Mono',monospace;margin-right:3px}
+.review-item{padding:10px 0;border-top:1px solid #354038}
+.review-item-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.review-item-top>strong{font:600 11px 'DM Mono',monospace;color:#e4ece4}
+.review-grade{font-size:9px;font-weight:800;padding:4px 6px;border-radius:5px}
+.review-grade.excellent{background:#29452e;color:#a9e4a6}
+.review-grade.good{background:#2d4035;color:#b9dfc1}
+.review-grade.inaccuracy{background:#4a4528;color:#f0d77b}
+.review-grade.mistake{background:#503a27;color:#f0b36e}
+.review-grade.blunder{background:#512e2c;color:#ffaaa0}
+.review-item-top button{margin-left:auto;background:transparent;border:1px solid #465448;border-radius:5px;color:#b8df71;padding:5px 7px;font-size:9px;cursor:pointer}
+.review-detail{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:7px;color:#8f9c91;font-size:9px}
+.review-detail b{color:#d6e1d6;font-family:'DM Mono',monospace}
+.review-variation{margin-top:6px;color:#a9c78e;font:10px 'DM Mono',monospace;line-height:1.5;overflow-wrap:anywhere}
+.review-disclaimer{margin:10px 0 0;color:#748176;font-size:9px;line-height:1.5}
+@media(max-width:760px){.review-head{align-items:flex-start;flex-direction:column}.review-head button{width:100%}}
