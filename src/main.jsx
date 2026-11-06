@@ -218,11 +218,12 @@ function App(){
         const onInfo=(event)=>{
           const line=String(event.data||'');
           if(!line.startsWith('info ')||!line.includes(' pv '))return;
-          const d=Number(line.match(/\\bdepth (\\d+)/)?.[1]||0);
-          const cp=line.match(/\\bscore cp (-?\\d+)/);
-          const mateScore=line.match(/\\bscore mate (-?\\d+)/);
-          if(!latest||d>=latest.depth){
-            latest={depth:d,score:cp?Number(cp[1])/100:mateScore?(Number(mateScore[1])>0?1000:-1000):0,mate:mateScore?Number(mateScore[1]):null,pv:line.match(/\\bpv (.+)$/)?.[1]?.trim().split(/\\s+/)||[]};
+          const d=Number(line.match(/\bdepth (\d+)/)?.[1]||0);
+          const cp=line.match(/\bscore cp (-?\d+)/);
+          const mateScore=line.match(/\bscore mate (-?\d+)/);
+          const pvMatch=line.match(/\bpv (.+)$/);
+          if(d>0&&pvMatch&&(!latest||d>=latest.depth)){
+            latest={depth:d,score:cp?Number(cp[1])/100:mateScore?(Number(mateScore[1])>0?1000:-1000):null,mate:mateScore?Number(mateScore[1]):null,pv:pvMatch[1].trim().split(/\s+/)};
           }
         };
         reviewWorker.addEventListener('message',onInfo);
@@ -230,10 +231,13 @@ function App(){
         reviewWorker.postMessage('go depth 13');
         const bestLine=await bestMoveLine;
         reviewWorker.removeEventListener('message',onInfo);
-        const uci=bestLine.split(/\\s+/)[1];
+        const uci=bestLine.split(/\s+/)[1];
+        if(!latest||latest.depth<1||latest.score===null||!latest.pv.length||!uci||uci==='(none)'){
+          throw new Error('Stockfish não retornou uma avaliação válida para uma das posições. Nenhum lance foi classificado.');
+        }
         const side=new Chess(position).turn();
-        const whiteScore=latest?(side==='w'?latest.score:-latest.score):0;
-        return {whiteScore,depth:latest?.depth||0,pv:latest?.pv||[],best:uci&&uci!=='(none)'?uci:null,mate:latest?.mate??null};
+        const whiteScore=side==='w'?latest.score:-latest.score;
+        return {whiteScore,depth:latest.depth,pv:latest.pv,best:uci,mate:latest.mate};
       };
       const positions=[new Chess(initialFen==='start'?undefined:initialFen)];
       for(const move of moves){const next=new Chess(positions.at(-1).fen());next.move(move);positions.push(next);}
