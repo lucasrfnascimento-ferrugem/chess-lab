@@ -105,3 +105,8 @@
 .engine-levels.opponent-levels{grid-template-columns:repeat(4,minmax(0,1fr))}
 .engine-levels.opponent-levels button strong{font:700 12px Manrope,system-ui,sans-serif;white-space:nowrap}
 @media(max-width:420px){.engine-levels.opponent-levels{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.san-legend{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;padding:9px 18px;margin:0 0 5px;color:#aeb8ad;font-size:10px;border-bottom:1px solid #303a32}
+.san-legend strong{width:100%;font-size:10px;letter-spacing:.04em;color:#d6dfd3;text-transform:uppercase}
+.san-legend span{white-space:nowrap}
+.san-legend b{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 3px;margin-right:3px;border-radius:4px;background:#35442d;color:#e4f3d2;font-size:11px}
