@@ -12,6 +12,12 @@ const clamp = (n,min,max) => Math.max(min,Math.min(max,n));
 function pvToSan(fen,pv){const g=new Chess(fen);const out=[];for(const u of (pv||[]).slice(0,9)){try{const m=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]||'q'});if(!m)break;out.push(m.san);}catch{break;}}return out.join(' ');}
 
 function App(){
+  const [restoredGame] = useState(()=>{
+    try{
+      const raw=localStorage.getItem('chess-lab-current-game-v1');
+      return raw?JSON.parse(raw):{};
+    }catch{return {};}
+  });
   const [session,setSession] = useState(null);
   const [authOpen,setAuthOpen] = useState(false);
   const [authMode,setAuthMode] = useState('login');
@@ -29,10 +35,10 @@ function App(){
   const [exerciseDifficulty,setExerciseDifficulty] = useState('intermediate');
   const [dashboardTab,setDashboardTab] = useState('history');
   const savedGameKeyRef = useRef('');
-  const [gameMode,setGameMode] = useState('both');
-  const [humanColor,setHumanColor] = useState('w');
-  const [orientation,setOrientation] = useState('w');
-  const [initialFen,setInitialFen] = useState('start');
+  const [gameMode,setGameMode] = useState(()=>restoredGame.gameMode||'both');
+  const [humanColor,setHumanColor] = useState(()=>restoredGame.humanColor||'w');
+  const [orientation,setOrientation] = useState(()=>restoredGame.orientation||'w');
+  const [initialFen,setInitialFen] = useState(()=>restoredGame.initialFen||'start');
   const turnRef = useRef('w');
   const [fenInput,setFenInput] = useState('');
   const [pgnInput,setPgnInput] = useState('');
@@ -40,15 +46,15 @@ function App(){
   const [showArrows,setShowArrows] = useState(true);
   const [showThreats,setShowThreats] = useState(true);
   const [showAlt,setShowAlt] = useState(true);
-  const [analysisOn,setAnalysisOn] = useState(true);
-  const [depth,setDepth] = useState(16);
-  const [engineLevel,setEngineLevel] = useState(5);
-  const [opponentLevel,setOpponentLevel] = useState('beginner');
+  const [analysisOn,setAnalysisOn] = useState(()=>restoredGame.analysisOn??true);
+  const [depth,setDepth] = useState(()=>restoredGame.depth||16);
+  const [engineLevel,setEngineLevel] = useState(()=>restoredGame.engineLevel||5);
+  const [opponentLevel,setOpponentLevel] = useState(()=>restoredGame.opponentLevel||'beginner');
   const engineCandidatesRef = useRef([]);
   const [selected,setSelected] = useState(null);
   const [promotion,setPromotion] = useState(null);
-  const [historyIndex,setHistoryIndex] = useState(0);
-  const [moves,setMoves] = useState([]);
+  const [historyIndex,setHistoryIndex] = useState(()=>Number.isInteger(restoredGame.historyIndex)?restoredGame.historyIndex:0);
+  const [moves,setMoves] = useState(()=>Array.isArray(restoredGame.moves)?restoredGame.moves:[]);
   const [engineState,setEngineState] = useState('Carregando engine…');
   const [engineLines,setEngineLines] = useState([]);
   const [bestMove,setBestMove] = useState(null);
@@ -56,8 +62,8 @@ function App(){
   const [mate,setMate] = useState(null);
   const [thinking,setThinking] = useState(false);
   const [notice,setNotice] = useState('Selecione uma peça e depois a casa de destino.');
-  const [soundOn,setSoundOn] = useState(true);
-  const [soundVolume,setSoundVolume] = useState(55);
+  const [soundOn,setSoundOn] = useState(()=>restoredGame.soundOn??true);
+  const [soundVolume,setSoundVolume] = useState(()=>restoredGame.soundVolume??55);
   const audioRef = useRef(null);
   const workerRef = useRef(null);
   const engineReady = useRef(false);
@@ -68,6 +74,15 @@ function App(){
     return g;
   },[moves,historyIndex,initialFen]);
   const fen = game.fen();
+
+  useEffect(()=>{
+    try{
+      localStorage.setItem('chess-lab-current-game-v1',JSON.stringify({
+        gameMode,humanColor,orientation,initialFen,moves,historyIndex,
+        analysisOn,depth,engineLevel,opponentLevel,soundOn,soundVolume
+      }));
+    }catch(e){console.warn('Não foi possível salvar a partida localmente.',e);}
+  },[gameMode,humanColor,orientation,initialFen,moves,historyIndex,analysisOn,depth,engineLevel,opponentLevel,soundOn,soundVolume]);
   const turn = game.turn();
   turnRef.current = turn;
   const history = game.history({verbose:true});
