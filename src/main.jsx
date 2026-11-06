@@ -61,6 +61,11 @@ function App(){
   const [evalCp,setEvalCp] = useState(0);
   const [mate,setMate] = useState(null);
   const [thinking,setThinking] = useState(false);
+  const [reviewBusy,setReviewBusy] = useState(false);
+  const [reviewProgress,setReviewProgress] = useState(0);
+  const [reviewResults,setReviewResults] = useState([]);
+  const [reviewOpen,setReviewOpen] = useState(false);
+
   const [notice,setNotice] = useState('Selecione uma peça e depois a casa de destino.');
   const [soundOn,setSoundOn] = useState(()=>restoredGame.soundOn??true);
   const [soundVolume,setSoundVolume] = useState(()=>restoredGame.soundVolume??55);
@@ -183,6 +188,84 @@ function App(){
     },350);
     return ()=>clearTimeout(timer);
   },[computerTurn,bestMove,thinking,fen]);
+
+
+  async function analyzeFullGame(){
+    if(!moves.length || reviewBusy)return;
+    setReviewBusy(true);setReviewProgress(0);setReviewResults([]);setReviewOpen(true);
+    let reviewWorker;
+    try{
+      reviewWorker=new Worker(`${import.meta.env.BASE_URL}engine/stockfish-19-lite-single.js`);
+      const waitForLine=(predicate,timeout=30000)=>new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>{reviewWorker.removeEventListener('message',handler);reject(new Error('Tempo limite da análise excedido.'));},timeout);
+        const handler=(event)=>{
+          const line=String(event.data||'');
+          if(predicate(line)){clearTimeout(timer);reviewWorker.removeEventListener('message',handler);resolve(line);}
+          else if(line.startsWith('Error')||line.startsWith('error')){clearTimeout(timer);reviewWorker.removeEventListener('message',handler);reject(new Error(line));}
+        };
+        reviewWorker.addEventListener('message',handler);
+      });
+      const ready=waitForLine(line=>line==='uciok');
+      reviewWorker.postMessage('uci');
+      await ready;
+      reviewWorker.postMessage('setoption name MultiPV value 1');
+      const readyAgain=waitForLine(line=>line==='readyok');
+      reviewWorker.postMessage('isready');
+      await readyAgain;
+      const evaluate=async(position)=>{
+        let latest=null;
+        const bestMoveLine=waitForLine(line=>line.startsWith('bestmove '),60000);
+        const onInfo=(event)=>{
+          const line=String(event.data||'');
+          if(!line.startsWith('info ')||!line.includes(' pv '))return;
+          const d=Number(line.match(/\\bdepth (\\d+)/)?.[1]||0);
+          const cp=line.match(/\\bscore cp (-?\\d+)/);
+          const mateScore=line.match(/\\bscore mate (-?\\d+)/);
+          if(!latest||d>=latest.depth){
+            latest={depth:d,score:cp?Number(cp[1])/100:mateScore?(Number(mateScore[1])>0?1000:-1000):0,mate:mateScore?Number(mateScore[1]):null,pv:line.match(/\\bpv (.+)$/)?.[1]?.trim().split(/\\s+/)||[]};
+          }
+        };
+        reviewWorker.addEventListener('message',onInfo);
+        reviewWorker.postMessage(`position fen ${position}`);
+        reviewWorker.postMessage('go depth 13');
+        const bestLine=await bestMoveLine;
+        reviewWorker.removeEventListener('message',onInfo);
+        const uci=bestLine.split(/\\s+/)[1];
+        const side=new Chess(position).turn();
+        const whiteScore=latest?(side==='w'?latest.score:-latest.score):0;
+        return {whiteScore,depth:latest?.depth||0,pv:latest?.pv||[],best:uci&&uci!=='(none)'?uci:null,mate:latest?.mate??null};
+      };
+      const positions=[new Chess(initialFen==='start'?undefined:initialFen)];
+      for(const move of moves){const next=new Chess(positions.at(-1).fen());next.move(move);positions.push(next);}
+      const evaluations=[];
+      for(let i=0;i<positions.length;i++){
+        evaluations.push(await evaluate(positions[i].fen()));
+        setReviewProgress(Math.round((i+1)/positions.length*100));
+      }
+      const results=moves.map((move,i)=>{
+        const before=evaluations[i],after=evaluations[i+1];
+        const mover=move.color;
+        const loss=mover==='w'?before.whiteScore-after.whiteScore:after.whiteScore-before.whiteScore;
+        const centipawnLoss=Math.max(0,loss);
+        let grade,label;
+        if(centipawnLoss<=0.10){grade='excellent';label='Excelente';}
+        else if(centipawnLoss<=0.30){grade='good';label='Bom';}
+        else if(centipawnLoss<=0.70){grade='inaccuracy';label='Imprecisão';}
+        else if(centipawnLoss<=1.50){grade='mistake';label='Erro';}
+        else{grade='blunder';label='Erro grave';}
+        const bestSan=before.pv.length?pvToSan(positions[i].fen(),before.pv):'—';
+        const bestFirst=before.best?pvToSan(positions[i].fen(),[before.best]):'—';
+        return {index:i,move:move.san||'Lance',color:mover,grade,label,loss:centipawnLoss,before:before.whiteScore,after:after.whiteScore,best:bestFirst,variation:bestSan,depth:Math.min(before.depth,after.depth)};
+      });
+      setReviewResults(results);
+      setNotice('Análise da partida concluída.');
+    }catch(error){
+      setNotice('Não foi possível concluir a análise: '+error.message);
+    }finally{
+      if(reviewWorker){try{reviewWorker.postMessage('quit');reviewWorker.terminate();}catch{}}
+      setReviewBusy(false);
+    }
+  }
 
   function playMoveSound(type){
     if(!soundOn || soundVolume===0) return;
@@ -411,6 +494,26 @@ function App(){
         <div className="section-divider"/>
         <div className="moves-heading"><strong>Histórico de lances</strong><span>{moves.length} lances</span></div>
         <div className="move-list">{moves.length===0?<div className="empty-moves">A partida ainda não começou.</div>:Array.from({length:Math.ceil(moves.length/2)},(_,i)=><div className={`move-pair ${historyIndex===i*2+1||historyIndex===i*2+2?'current':''}`} key={i}><span>{i+1}.</span><button onClick={()=>navigate(i*2+1)}>{moves[i*2]?.san||`${moves[i*2]?.from}–${moves[i*2]?.to}`}</button><button onClick={()=>moves[i*2+1]&&navigate(i*2+2)}>{moves[i*2+1]?.san||''}</button></div>)}</div>
+
+        <div className="game-review">
+          <div className="review-head"><div><strong>Revisão da partida</strong><small>Descubra quais lances foram bons e onde perdeu vantagem.</small></div><button onClick={analyzeFullGame} disabled={!moves.length||reviewBusy}>{reviewBusy?'Analisando…':'Analisar partida'}</button></div>
+          {reviewBusy&&<div className="review-progress"><div><span>Calculando posições</span><strong>{reviewProgress}%</strong></div><div className="review-progress-track"><span style={{width:`${reviewProgress}%`}}/></div></div>}
+          {reviewResults.length>0&&<><button className="review-toggle" onClick={()=>setReviewOpen(v=>!v)}>{reviewOpen?'Ocultar relatório':'Mostrar relatório'} · {reviewResults.length} lances avaliados</button>{reviewOpen&&<div className="review-results">
+            <div className="review-summary">
+              <span><strong>{reviewResults.filter(x=>x.grade==='excellent').length}</strong> excelentes</span>
+              <span><strong>{reviewResults.filter(x=>x.grade==='good').length}</strong> bons</span>
+              <span><strong>{reviewResults.filter(x=>x.grade==='inaccuracy').length}</strong> imprecisões</span>
+              <span><strong>{reviewResults.filter(x=>x.grade==='mistake').length}</strong> erros</span>
+              <span><strong>{reviewResults.filter(x=>x.grade==='blunder').length}</strong> graves</span>
+            </div>
+            {reviewResults.map(item=><div className="review-item" key={item.index}>
+              <div className="review-item-top"><strong>{Math.floor(item.index/2)+1}{item.color==='w'?'.':'…'} {item.move}</strong><span className={`review-grade ${item.grade}`}>{item.label}</span><button onClick={()=>navigate(item.index+1)}>Ver posição ↗</button></div>
+              <div className="review-detail"><span>Melhor lance: <b>{item.best}</b></span><span>Perda estimada: <b>{item.loss.toFixed(2)}</b></span><span>Profundidade: {item.depth}</span></div>
+              {item.grade!=='excellent'&&item.variation&&<div className="review-variation">Continuação sugerida: {item.variation}</div>}
+            </div>)}
+            <p className="review-disclaimer">Classificação automática baseada na variação da avaliação do Stockfish, com profundidade 13. As avaliações são aproximadas e podem variar conforme a posição e o tempo de cálculo.</p>
+          </div>}</>}
+        </div>
         <div className="panel-footer"><button onClick={()=>setShowImport(v=>!v)}>＋ FEN / PGN</button><button onClick={exportPgn}>⇩ Exportar PGN</button><button onClick={()=>setGameMode(m=>m==='both'?'computer':'both')}>{gameMode==='both'?'♟ Jogar contra engine':'⇄ Jogar os dois lados'}</button></div>
         {showImport&&<div className="import-box"><div className="import-head"><strong>Importar posição ou partida</strong><button onClick={()=>setShowImport(false)}>×</button></div><label>FEN<input value={fenInput} onChange={e=>setFenInput(e.target.value)} placeholder="Cole uma posição FEN"/></label><button onClick={loadFen}>Carregar FEN</button><label>PGN<textarea value={pgnInput} onChange={e=>setPgnInput(e.target.value)} placeholder="Cole a notação PGN"/></label><button onClick={loadPgn}>Carregar PGN</button></div>}
       </aside>
