@@ -244,7 +244,7 @@ function App(){
       }
       const results=moves.map((move,i)=>{
         const before=evaluations[i],after=evaluations[i+1];
-        const mover=move.color;
+        const mover=positions[i].turn();
         const loss=mover==='w'?before.whiteScore-after.whiteScore:after.whiteScore-before.whiteScore;
         const centipawnLoss=Math.max(0,loss);
         let grade,label;
